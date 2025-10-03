@@ -68,7 +68,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline'; img-src * data: blob:; font-src *; connect-src *; media-src *; object-src *; child-src *; worker-src *; frame-src *; frame-ancestors *; form-action *;"
+            value: "default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline'; img-src * data: blob:; font-src *; connect-src *; media-src *; object-src *; child-src *; frame-src *; worker-src *; frame-ancestors *; form-action *;"
           }
         ],
       },
@@ -92,13 +92,13 @@ const nextConfig = {
     ]
   },
   
-  // Configurações experimentais para melhor performance
+  // Configurações experimentais para melhor performance - CORRIGIDO
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons']
   },
   
-  // Configurações externas movidas para o nível raiz
-  serverExternalPackages: [],
+  // Configurações externas movidas para o local correto - CORRIGIDO
+  serverExternalPackages: ['@supabase/supabase-js'],
   
   // Configurações de webpack para resolver problemas de build
   webpack: (config, { isServer }) => {
