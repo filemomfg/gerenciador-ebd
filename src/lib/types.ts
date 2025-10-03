@@ -62,7 +62,6 @@ export interface Professor {
   endereco?: string
   igreja_id: string
   sala_id: string // Sala específica que leciona
-  salas_ids?: string[] // Múltiplas salas que leciona
   user_id?: string
   ativo: boolean
   created_at: string
