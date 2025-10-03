@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/auth'
-// // // // // // // // // // // // import { api } from '@/lib/api' // Removido para evitar erro de build // Removido para evitar erro de build // Removido para evitar erro de build // Removido para evitar erro de build // Removido para evitar erro de build // Removido para evitar erro de build // Removido para evitar erro de build // Removido para evitar erro de build // Removido para evitar erro de build // Removido para evitar erro de build // Removido para evitar erro de build // Removido para evitar erro de build
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -85,7 +84,7 @@ export function SalaManagement() {
     try {
       setSaving(true)
       
-      const salaData = {
+      const salaData: Sala = {
         id: editingSala?.id || Date.now().toString(),
         ...formData,
         professor_id: selectedProfessores.length > 0 ? selectedProfessores[0] : '', // Compatibilidade
