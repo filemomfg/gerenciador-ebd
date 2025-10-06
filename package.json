@@ -1,14 +1,12 @@
 {
-  "name": "ebd-digital-pro",
-  "version": "1.0.0",
+  "name": "template",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "clean": "rm -rf .next node_modules/.cache",
-    "build:production": "npm run clean && npm run build"
+    "lint": "next lint"
   },
   "dependencies": {
     "@fontsource/geist-mono": "^5.1.0",
@@ -87,9 +85,5 @@
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.6",
     "typescript": "^5"
-  },
-  "engines": {
-    "node": ">=18.17.0",
-    "npm": ">=9.0.0"
   }
 }
