@@ -1,8 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Configuração com fallback para evitar erros de build
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
@@ -16,10 +15,8 @@ export interface Database {
           nome: string
           email: string
           senha: string
-          role: 'admin' | 'admin_igreja' | 'professor' | 'aluno'
+          role: 'admin' | 'professor' | 'secretario'
           igreja_id?: string
-          sala_id?: string
-          ativo?: boolean
           created_at: string
           updated_at: string
         }
@@ -28,10 +25,8 @@ export interface Database {
           nome: string
           email: string
           senha: string
-          role: 'admin' | 'admin_igreja' | 'professor' | 'aluno'
+          role: 'admin' | 'professor' | 'secretario'
           igreja_id?: string
-          sala_id?: string
-          ativo?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -40,10 +35,8 @@ export interface Database {
           nome?: string
           email?: string
           senha?: string
-          role?: 'admin' | 'admin_igreja' | 'professor' | 'aluno'
+          role?: 'admin' | 'professor' | 'secretario'
           igreja_id?: string
-          sala_id?: string
-          ativo?: boolean
           updated_at?: string
         }
       }
@@ -52,14 +45,9 @@ export interface Database {
           id: string
           nome: string
           endereco: string
-          cidade: string
-          estado: string
-          cep: string
           telefone?: string
           email?: string
-          logo_url?: string
-          configuracoes: any
-          admin_id: string
+          pastor?: string
           created_at: string
           updated_at: string
         }
@@ -67,14 +55,9 @@ export interface Database {
           id?: string
           nome: string
           endereco: string
-          cidade: string
-          estado: string
-          cep: string
           telefone?: string
           email?: string
-          logo_url?: string
-          configuracoes: any
-          admin_id: string
+          pastor?: string
           created_at?: string
           updated_at?: string
         }
@@ -82,14 +65,9 @@ export interface Database {
           id?: string
           nome?: string
           endereco?: string
-          cidade?: string
-          estado?: string
-          cep?: string
           telefone?: string
           email?: string
-          logo_url?: string
-          configuracoes?: any
-          admin_id?: string
+          pastor?: string
           updated_at?: string
         }
       }
@@ -97,36 +75,27 @@ export interface Database {
         Row: {
           id: string
           nome: string
-          faixa_etaria?: string
           descricao?: string
           igreja_id: string
-          professor_id?: string
-          professores_ids?: string[]
-          ativa: boolean
+          capacidade?: number
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
           nome: string
-          faixa_etaria?: string
           descricao?: string
           igreja_id: string
-          professor_id?: string
-          professores_ids?: string[]
-          ativa?: boolean
+          capacidade?: number
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
           nome?: string
-          faixa_etaria?: string
           descricao?: string
           igreja_id?: string
-          professor_id?: string
-          professores_ids?: string[]
-          ativa?: boolean
+          capacidade?: number
           updated_at?: string
         }
       }
@@ -135,14 +104,10 @@ export interface Database {
           id: string
           nome: string
           email?: string
-          senha?: string
           telefone?: string
-          data_nascimento: string
-          endereco?: string
           igreja_id: string
-          sala_id: string
+          sala_id?: string
           user_id?: string
-          ativo: boolean
           created_at: string
           updated_at: string
         }
@@ -150,14 +115,10 @@ export interface Database {
           id?: string
           nome: string
           email?: string
-          senha?: string
           telefone?: string
-          data_nascimento: string
-          endereco?: string
           igreja_id: string
-          sala_id: string
+          sala_id?: string
           user_id?: string
-          ativo?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -165,14 +126,10 @@ export interface Database {
           id?: string
           nome?: string
           email?: string
-          senha?: string
           telefone?: string
-          data_nascimento?: string
-          endereco?: string
           igreja_id?: string
           sala_id?: string
           user_id?: string
-          ativo?: boolean
           updated_at?: string
         }
       }
@@ -185,8 +142,8 @@ export interface Database {
           endereco?: string
           responsavel?: string
           telefone_responsavel?: string
-          sala_id: string
           igreja_id: string
+          sala_id: string
           ativo: boolean
           created_at: string
           updated_at: string
@@ -199,8 +156,8 @@ export interface Database {
           endereco?: string
           responsavel?: string
           telefone_responsavel?: string
-          sala_id: string
           igreja_id: string
+          sala_id: string
           ativo?: boolean
           created_at?: string
           updated_at?: string
@@ -213,8 +170,8 @@ export interface Database {
           endereco?: string
           responsavel?: string
           telefone_responsavel?: string
-          sala_id?: string
           igreja_id?: string
+          sala_id?: string
           ativo?: boolean
           updated_at?: string
         }
@@ -223,11 +180,10 @@ export interface Database {
         Row: {
           id: string
           data: string
-          sala_id: string
+          licao: string
           professor_id: string
+          sala_id: string
           igreja_id: string
-          total_presentes: number
-          total_visitantes: number
           observacoes?: string
           created_at: string
           updated_at: string
@@ -235,11 +191,10 @@ export interface Database {
         Insert: {
           id?: string
           data: string
-          sala_id: string
+          licao: string
           professor_id: string
+          sala_id: string
           igreja_id: string
-          total_presentes: number
-          total_visitantes: number
           observacoes?: string
           created_at?: string
           updated_at?: string
@@ -247,11 +202,10 @@ export interface Database {
         Update: {
           id?: string
           data?: string
-          sala_id?: string
+          licao?: string
           professor_id?: string
+          sala_id?: string
           igreja_id?: string
-          total_presentes?: number
-          total_visitantes?: number
           observacoes?: string
           updated_at?: string
         }
@@ -262,9 +216,7 @@ export interface Database {
           chamada_id: string
           aluno_id: string
           presente: boolean
-          justificativa?: string
-          capitulos_lidos?: number
-          fez_atividade?: boolean
+          observacoes?: string
           created_at: string
         }
         Insert: {
@@ -272,9 +224,7 @@ export interface Database {
           chamada_id: string
           aluno_id: string
           presente: boolean
-          justificativa?: string
-          capitulos_lidos?: number
-          fez_atividade?: boolean
+          observacoes?: string
           created_at?: string
         }
         Update: {
@@ -282,9 +232,7 @@ export interface Database {
           chamada_id?: string
           aluno_id?: string
           presente?: boolean
-          justificativa?: string
-          capitulos_lidos?: number
-          fez_atividade?: boolean
+          observacoes?: string
         }
       }
       avisos: {
@@ -292,13 +240,10 @@ export interface Database {
           id: string
           titulo: string
           conteudo: string
-          tipo: 'geral' | 'sala' | 'professor' | 'igreja'
+          autor_id: string
           igreja_id: string
           sala_id?: string
-          professor_id?: string
           ativo: boolean
-          data_inicio: string
-          data_fim?: string
           created_at: string
           updated_at: string
         }
@@ -306,13 +251,10 @@ export interface Database {
           id?: string
           titulo: string
           conteudo: string
-          tipo: 'geral' | 'sala' | 'professor' | 'igreja'
+          autor_id: string
           igreja_id: string
           sala_id?: string
-          professor_id?: string
           ativo?: boolean
-          data_inicio: string
-          data_fim?: string
           created_at?: string
           updated_at?: string
         }
@@ -320,13 +262,10 @@ export interface Database {
           id?: string
           titulo?: string
           conteudo?: string
-          tipo?: 'geral' | 'sala' | 'professor' | 'igreja'
+          autor_id?: string
           igreja_id?: string
           sala_id?: string
-          professor_id?: string
           ativo?: boolean
-          data_inicio?: string
-          data_fim?: string
           updated_at?: string
         }
       }
