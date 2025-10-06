@@ -111,7 +111,7 @@ export interface Aviso {
   id: string
   titulo: string
   conteudo: string
-  tipo: 'geral' | 'sala' | 'professor' | 'igreja'
+  tipo: 'geral' | 'sala' | 'professor'
   igreja_id: string
   sala_id?: string
   professor_id?: string
