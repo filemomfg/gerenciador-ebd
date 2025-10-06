@@ -92,13 +92,10 @@ const nextConfig = {
     ]
   },
   
-  // Configurações experimentais para melhor performance - CORRIGIDO
+  // Configurações experimentais para melhor performance
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons']
   },
-  
-  // Configurações externas movidas para o local correto - CORRIGIDO
-  serverExternalPackages: ['@supabase/supabase-js'],
   
   // Configurações de webpack para resolver problemas de build
   webpack: (config, { isServer }) => {
