@@ -3,6 +3,9 @@ const nextConfig = {
   // Configurações essenciais para deploy
   output: 'standalone',
   
+  // Otimizações de build
+  swcMinify: true,
+  
   // Configurações de imagem - mais permissivas
   images: {
     remotePatterns: [
@@ -28,7 +31,7 @@ const nextConfig = {
         headers: [
           {
             key: 'X-Frame-Options',
-            value: 'SAMEORIGIN',
+            value: 'SAMEORIGIN', // Corrigido para SAMEORIGIN
           },
           {
             key: 'X-Content-Type-Options',
@@ -40,7 +43,7 @@ const nextConfig = {
           },
           {
             key: 'Access-Control-Allow-Origin',
-            value: '*',
+            value: '*', // Permitir qualquer origem
           },
           {
             key: 'Access-Control-Allow-Methods',
@@ -48,7 +51,7 @@ const nextConfig = {
           },
           {
             key: 'Access-Control-Allow-Headers',
-            value: '*',
+            value: '*', // Permitir qualquer header
           },
           {
             key: 'Access-Control-Allow-Credentials',
@@ -72,6 +75,7 @@ const nextConfig = {
           }
         ],
       },
+      // Headers específicos para API
       {
         source: '/api/(.*)',
         headers: [
@@ -94,7 +98,8 @@ const nextConfig = {
   
   // Configurações experimentais para melhor performance
   experimental: {
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons']
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
+    serverComponentsExternalPackages: []
   },
   
   // Configurações de webpack para resolver problemas de build
@@ -120,14 +125,14 @@ const nextConfig = {
     return config
   },
   
-  // Configurações de TypeScript - detectar erros
+  // Configurações de TypeScript - mais permissivas
   typescript: {
-    ignoreBuildErrors: false,
+    ignoreBuildErrors: false, // Corrigido para false para detectar erros
   },
   
-  // Configurações de ESLint - detectar erros
+  // Configurações de ESLint - mais permissivas
   eslint: {
-    ignoreDuringBuilds: false,
+    ignoreDuringBuilds: false, // Corrigido para false
   },
   
   // Configurações de redirecionamento
@@ -149,7 +154,7 @@ const nextConfig = {
   compress: true,
   
   // Configurações de cache
-  generateEtags: true,
+  generateEtags: true, // Corrigido para true
   
   // Configurações de build
   distDir: '.next',
@@ -172,8 +177,8 @@ const nextConfig = {
   
   // Configurações adicionais para evitar bloqueios
   trailingSlash: false,
-  skipMiddlewareUrlNormalize: false,
-  skipTrailingSlashRedirect: false,
+  skipMiddlewareUrlNormalize: false, // Corrigido para false
+  skipTrailingSlashRedirect: false, // Corrigido para false
 }
 
 export default nextConfig
