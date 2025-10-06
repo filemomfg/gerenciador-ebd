@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/auth'
+import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -84,7 +85,7 @@ export function SalaManagement() {
     try {
       setSaving(true)
       
-      const salaData: Sala = {
+      const salaData = {
         id: editingSala?.id || Date.now().toString(),
         ...formData,
         professor_id: selectedProfessores.length > 0 ? selectedProfessores[0] : '', // Compatibilidade
