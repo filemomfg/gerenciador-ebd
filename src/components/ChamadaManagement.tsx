@@ -1,881 +1,681 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Textarea } from '@/components/ui/textarea'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
-import { 
-  ClipboardList, 
-  UserCheck, 
-  UserX, 
-  Calendar,
-  Users,
-  CheckCircle,
-  XCircle,
-  Save,
-  MessageSquare,
-  Settings,
-  AlertCircle,
-  CalendarDays
-} from 'lucide-react'
-import { Sala, Professor, Aluno, Chamada, PresencaAluno } from '@/lib/types'
-import { cn } from '@/lib/utils'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Calendar, Clock, Users, BookOpen, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
-interface ConfiguracaoChamada {
-  dias_especificos: boolean
-  dias_permitidos: string[] // ['domingo', 'quarta', etc]
-  horario_inicio?: string
-  horario_fim?: string
+interface Aluno {
+  id: string
+  nome: string
+  email: string
+  turma_id: string
+  created_at: string
 }
 
-export function ChamadaManagement() {
-  const { user } = useAuth()
-  const [salas, setSalas] = useState<Sala[]>([])
-  const [professores, setProfessores] = useState<Professor[]>([])
+interface Turma {
+  id: string
+  nome: string
+  professor_id: string
+  sala_id: string
+  created_at: string
+}
+
+interface Professor {
+  id: string
+  nome: string
+  email: string
+  sala_id: string
+  created_at: string
+}
+
+interface Chamada {
+  id: string
+  turma_id: string
+  professor_id: string
+  data: string
+  horario: string
+  capitulo: string
+  atividade_descricao?: string
+  observacoes?: string
+  created_at: string
+}
+
+interface PresencaAluno {
+  id: string
+  chamada_id: string
+  aluno_id: string
+  presente: boolean
+  justificativa?: string
+  capitulos_lidos: number
+  fez_atividade: boolean
+  created_at: string
+}
+
+// Função auxiliar para clipboard com fallback
+const copyToClipboard = async (text: string): Promise<boolean> => {
+  try {
+    // Tentar usar a Clipboard API moderna
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+      return true
+    } else {
+      // Fallback para método antigo
+      const textArea = document.createElement('textarea')
+      textArea.value = text
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-999999px'
+      textArea.style.top = '-999999px'
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      const result = document.execCommand('copy')
+      document.body.removeChild(textArea)
+      return result
+    }
+  } catch (error) {
+    console.warn('Erro ao copiar para clipboard:', error)
+    return false
+  }
+}
+
+export default function ChamadaManagement() {
+  const [turmas, setTurmas] = useState<Turma[]>([])
   const [alunos, setAlunos] = useState<Aluno[]>([])
+  const [professores, setProfessores] = useState<Professor[]>([])
   const [chamadas, setChamadas] = useState<Chamada[]>([])
-  const [loading, setLoading] = useState(true)
-  const [salvando, setSalvando] = useState(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  const [presencas, setPresencas] = useState<PresencaAluno[]>([])
   
-  // Configurações de chamada
-  const [configuracao, setConfiguracao] = useState<ConfiguracaoChamada>({
-    dias_especificos: false,
-    dias_permitidos: ['domingo']
-  })
-  const [showConfig, setShowConfig] = useState(false)
+  const [selectedTurma, setSelectedTurma] = useState<string>('')
+  const [selectedProfessor, setSelectedProfessor] = useState<string>('')
+  const [selectedChamada, setSelectedChamada] = useState<string>('')
   
-  // Estado da chamada atual
-  const [chamadaAtual, setChamadaAtual] = useState({
+  const [novaChamada, setNovaChamada] = useState({
     data: new Date().toISOString().split('T')[0],
-    sala_id: '',
-    total_visitantes: 0,
+    horario: new Date().toTimeString().slice(0, 5),
+    capitulo: '',
+    atividade_descricao: '',
     observacoes: ''
   })
   
-  // Estado das presenças e justificativas
-  const [presencasAlunos, setPresencasAlunos] = useState<{[key: string]: boolean}>({})
+  const [presencaAlunos, setPresencaAlunos] = useState<{[key: string]: boolean}>({})
   const [justificativas, setJustificativas] = useState<{[key: string]: string}>({})
-  const [dialogJustificativa, setDialogJustificativa] = useState<{open: boolean, alunoId: string, alunoNome: string}>({
-    open: false,
-    alunoId: '',
-    alunoNome: ''
-  })
+  const [capitulosLidos, setCapitulosLidos] = useState<{[key: string]: number}>({})
+  const [atividadeFeita, setAtividadeFeita] = useState<{[key: string]: boolean}>({})
+  
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
-  const diasSemana = [
-    { value: 'domingo', label: 'Domingo' },
-    { value: 'segunda', label: 'Segunda-feira' },
-    { value: 'terca', label: 'Terça-feira' },
-    { value: 'quarta', label: 'Quarta-feira' },
-    { value: 'quinta', label: 'Quinta-feira' },
-    { value: 'sexta', label: 'Sexta-feira' },
-    { value: 'sabado', label: 'Sábado' }
-  ]
-
+  // Carregar dados iniciais
   useEffect(() => {
-    loadData()
-    loadConfiguracao()
-  }, [user])
+    carregarDados()
+  }, [])
 
-  useEffect(() => {
-    // Se for professor, definir automaticamente sua sala
-    if (user?.role === 'professor') {
-      // Buscar professor pelo ID do usuário
-      const salasStorage = localStorage.getItem('salas')
-      if (salasStorage) {
-        const salasData = JSON.parse(salasStorage)
-        const salaProfessor = salasData.find((s: Sala) => s.professor_id === user.id)
-        if (salaProfessor) {
-          console.log('Sala do professor encontrada:', salaProfessor)
-          setChamadaAtual(prev => ({ ...prev, sala_id: salaProfessor.id }))
-          loadAlunosSala(salaProfessor.id)
-        } else {
-          console.log('Nenhuma sala encontrada para o professor:', user.id)
-        }
-      }
-    }
-  }, [user])
-
-  // Carregar alunos quando sala_id mudar
-  useEffect(() => {
-    if (chamadaAtual.sala_id) {
-      loadAlunosSala(chamadaAtual.sala_id)
-    }
-  }, [chamadaAtual.sala_id])
-
-  const loadData = async () => {
+  const carregarDados = async () => {
     try {
       setLoading(true)
       
-      // Carregar dados do localStorage
-      const salasStorage = localStorage.getItem('salas')
-      const professoresStorage = localStorage.getItem('professores')
-      const chamadasStorage = localStorage.getItem('chamadas')
+      // Carregar turmas
+      const { data: turmasData, error: turmasError } = await supabase
+        .from('turmas')
+        .select('*')
+        .order('nome')
       
-      if (salasStorage) {
-        const salasData = JSON.parse(salasStorage)
-        const salasIgreja = user?.igreja_id 
-          ? salasData.filter((s: Sala) => s.igreja_id === user.igreja_id)
-          : salasData
-        setSalas(salasIgreja)
-      }
+      if (turmasError) throw turmasError
+      setTurmas(turmasData || [])
       
-      if (professoresStorage) {
-        const professoresData = JSON.parse(professoresStorage)
-        const professoresIgreja = user?.igreja_id 
-          ? professoresData.filter((p: Professor) => p.igreja_id === user.igreja_id)
-          : professoresData
-        setProfessores(professoresIgreja)
-      }
+      // Carregar professores
+      const { data: professoresData, error: professoresError } = await supabase
+        .from('professores')
+        .select('*')
+        .order('nome')
       
-      if (chamadasStorage) {
-        const chamadasData = JSON.parse(chamadasStorage)
-        const chamadasIgreja = user?.igreja_id 
-          ? chamadasData.filter((c: Chamada) => c.igreja_id === user.igreja_id)
-          : chamadasData
-        setChamadas(chamadasIgreja)
-      }
-
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error)
-      showMessage('error', 'Erro ao carregar dados. Tente novamente.')
+      if (professoresError) throw professoresError
+      setProfessores(professoresData || [])
+      
+      // Carregar chamadas
+      const { data: chamadasData, error: chamadasError } = await supabase
+        .from('chamadas')
+        .select('*')
+        .order('data', { ascending: false })
+      
+      if (chamadasError) throw chamadasError
+      setChamadas(chamadasData || [])
+      
+    } catch (err) {
+      console.error('Erro ao carregar dados:', err)
+      setError('Erro ao carregar dados')
     } finally {
       setLoading(false)
     }
   }
 
-  const loadConfiguracao = () => {
-    try {
-      const configStorage = localStorage.getItem(`config_chamada_${user?.igreja_id}`)
-      if (configStorage) {
-        setConfiguracao(JSON.parse(configStorage))
-      }
-    } catch (error) {
-      console.error('Erro ao carregar configuração:', error)
+  // Carregar alunos quando turma for selecionada
+  useEffect(() => {
+    if (selectedTurma) {
+      carregarAlunos(selectedTurma)
     }
-  }
+  }, [selectedTurma])
 
-  const salvarConfiguracao = () => {
+  const carregarAlunos = async (turmaId: string) => {
     try {
-      localStorage.setItem(`config_chamada_${user?.igreja_id}`, JSON.stringify(configuracao))
-      showMessage('success', 'Configurações salvas com sucesso!')
-      setShowConfig(false)
-    } catch (error) {
-      console.error('Erro ao salvar configuração:', error)
-      showMessage('error', 'Erro ao salvar configurações.')
-    }
-  }
-
-  const loadAlunosSala = async (salaId: string) => {
-    if (!salaId) {
-      setAlunos([])
-      return
-    }
-    
-    try {
-      console.log('Carregando alunos para sala:', salaId)
+      const { data: alunosData, error } = await supabase
+        .from('alunos')
+        .select('*')
+        .eq('turma_id', turmaId)
+        .order('nome')
       
-      // Carregar alunos do localStorage
-      const alunosStorage = localStorage.getItem('alunos')
-      if (alunosStorage) {
-        const alunosData = JSON.parse(alunosStorage)
-        console.log('Todos os alunos:', alunosData)
-        
-        // Filtrar alunos da sala específica e que estão ativos
-        const alunosSala = alunosData.filter((a: Aluno) => 
-          a.sala_id === salaId && a.ativo !== false
-        )
-        console.log('Alunos da sala:', alunosSala)
-        
-        setAlunos(alunosSala)
-        
-        // Inicializar presenças como false e justificativas vazias
-        const presencasIniciais: {[key: string]: boolean} = {}
-        const justificativasIniciais: {[key: string]: string} = {}
-        alunosSala.forEach((aluno: Aluno) => {
-          presencasIniciais[aluno.id] = false
-          justificativasIniciais[aluno.id] = ''
-        })
-        setPresencasAlunos(presencasIniciais)
-        setJustificativas(justificativasIniciais)
-        
-        console.log('Presenças inicializadas:', presencasIniciais)
-      } else {
-        console.log('Nenhum aluno encontrado no localStorage')
-        setAlunos([])
-      }
+      if (error) throw error
+      setAlunos(alunosData || [])
       
-    } catch (error) {
-      console.error('Erro ao carregar alunos:', error)
-      showMessage('error', 'Erro ao carregar alunos da sala.')
-      setAlunos([])
+      // Resetar estados de presença
+      setPresencaAlunos({})
+      setJustificativas({})
+      setCapitulosLidos({})
+      setAtividadeFeita({})
+      
+    } catch (err) {
+      console.error('Erro ao carregar alunos:', err)
+      setError('Erro ao carregar alunos')
     }
   }
 
-  const showMessage = (type: 'success' | 'error', text: string) => {
-    setMessage({ type, text })
-    setTimeout(() => setMessage(null), 5000)
-  }
+  // Carregar presenças quando chamada for selecionada
+  useEffect(() => {
+    if (selectedChamada) {
+      carregarPresencas(selectedChamada)
+    }
+  }, [selectedChamada])
 
-  const verificarDiaPermitido = (data: string) => {
-    if (!configuracao.dias_especificos) return true
-    
-    const dataObj = new Date(data + 'T00:00:00')
-    const diaSemana = dataObj.getDay()
-    const diasMap = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']
-    const diaAtual = diasMap[diaSemana]
-    
-    return configuracao.dias_permitidos.includes(diaAtual)
-  }
-
-  const togglePresenca = (alunoId: string) => {
-    const novoStatus = !presencasAlunos[alunoId]
-    
-    setPresencasAlunos(prev => ({
-      ...prev,
-      [alunoId]: novoStatus
-    }))
-
-    // Se marcou como falta, abrir dialog para justificativa
-    if (!novoStatus) {
-      const aluno = alunos.find(a => a.id === alunoId)
-      setDialogJustificativa({
-        open: true,
-        alunoId: alunoId,
-        alunoNome: aluno?.nome || ''
+  const carregarPresencas = async (chamadaId: string) => {
+    try {
+      const { data: presencasData, error } = await supabase
+        .from('presencas_alunos')
+        .select('*')
+        .eq('chamada_id', chamadaId)
+      
+      if (error) throw error
+      setPresencas(presencasData || [])
+      
+      // Preencher estados com dados existentes
+      const presencaMap: {[key: string]: boolean} = {}
+      const justificativaMap: {[key: string]: string} = {}
+      const capitulosMap: {[key: string]: number} = {}
+      const atividadeMap: {[key: string]: boolean} = {}
+      
+      presencasData?.forEach(presenca => {
+        presencaMap[presenca.aluno_id] = presenca.presente
+        if (presenca.justificativa) {
+          justificativaMap[presenca.aluno_id] = presenca.justificativa
+        }
+        capitulosMap[presenca.aluno_id] = presenca.capitulos_lidos
+        atividadeMap[presenca.aluno_id] = presenca.fez_atividade
       })
-    } else {
-      // Se marcou como presente, limpar justificativa
-      setJustificativas(prev => ({
-        ...prev,
-        [alunoId]: ''
-      }))
+      
+      setPresencaAlunos(presencaMap)
+      setJustificativas(justificativaMap)
+      setCapitulosLidos(capitulosMap)
+      setAtividadeFeita(atividadeMap)
+      
+    } catch (err) {
+      console.error('Erro ao carregar presenças:', err)
+      setError('Erro ao carregar presenças')
     }
   }
 
-  const salvarJustificativa = () => {
-    setDialogJustificativa({ open: false, alunoId: '', alunoNome: '' })
-  }
-
-  const handleSalvarChamada = async () => {
-    if (!chamadaAtual.sala_id) {
-      showMessage('error', 'Selecione uma sala para a chamada')
-      return
-    }
-
-    if (!verificarDiaPermitido(chamadaAtual.data)) {
-      showMessage('error', 'Chamada não permitida neste dia. Verifique as configurações.')
+  const criarChamada = async () => {
+    if (!selectedTurma || !selectedProfessor || !novaChamada.capitulo) {
+      setError('Preencha todos os campos obrigatórios')
       return
     }
 
     try {
-      setSalvando(true)
-
-      // Encontrar o professor da sala
-      let professor = null
-      if (user?.role === 'professor') {
-        // Se for professor, usar o próprio usuário
-        professor = professores.find(p => p.id === user.id)
-      } else {
-        // Se for admin, encontrar professor da sala
-        professor = professores.find(p => {
-          const salasStorage = localStorage.getItem('salas')
-          if (salasStorage) {
-            const salasData = JSON.parse(salasStorage)
-            const sala = salasData.find((s: Sala) => s.id === chamadaAtual.sala_id)
-            return sala && sala.professor_id === p.id
-          }
-          return false
-        })
-      }
-
-      if (!professor) {
-        showMessage('error', 'Professor não encontrado para esta sala')
-        return
-      }
-
-      // Contar presenças
-      const totalPresentes = Object.values(presencasAlunos).filter(presente => presente).length
-
+      setLoading(true)
+      setError(null)
+      
       // Criar chamada
-      const novaChamada: Chamada = {
-        id: Date.now().toString(),
-        data: chamadaAtual.data,
-        sala_id: chamadaAtual.sala_id,
-        professor_id: professor.id,
-        igreja_id: user?.igreja_id || '',
-        total_presentes: totalPresentes,
-        total_visitantes: chamadaAtual.total_visitantes,
-        observacoes: chamadaAtual.observacoes,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+      const chamadaData = {
+        id: `chamada_${Date.now()}`,
+        turma_id: selectedTurma,
+        professor_id: selectedProfessor,
+        data: novaChamada.data,
+        horario: novaChamada.horario,
+        capitulo: novaChamada.capitulo,
+        atividade_descricao: novaChamada.atividade_descricao || null,
+        observacoes: novaChamada.observacoes || null,
+        created_at: new Date().toISOString()
       }
-
-      // Salvar chamada no localStorage
-      const chamadasStorage = localStorage.getItem('chamadas')
-      const chamadasArray = chamadasStorage ? JSON.parse(chamadasStorage) : []
-      chamadasArray.push(novaChamada)
-      localStorage.setItem('chamadas', JSON.stringify(chamadasArray))
-
-      // Criar presenças dos alunos
-      const presencasStorage = localStorage.getItem('presencas_alunos')
-      const presencasArray = presencasStorage ? JSON.parse(presencasStorage) : []
-
-      for (const [alunoId, presente] of Object.entries(presencasAlunos)) {
+      
+      const { data: chamadaCriada, error: chamadaError } = await supabase
+        .from('chamadas')
+        .insert([chamadaData])
+        .select()
+        .single()
+      
+      if (chamadaError) throw chamadaError
+      
+      // Criar presenças para todos os alunos
+      const presencasArray: PresencaAluno[] = []
+      
+      for (const aluno of alunos) {
+        const alunoId = aluno.id
+        const presente = presencaAlunos[alunoId] || false
+        
         const presenca: PresencaAluno = {
           id: `${Date.now()}-${alunoId}`,
-          chamada_id: novaChamada.id,
+          chamada_id: chamadaCriada.id,
           aluno_id: alunoId,
           presente,
           justificativa: presente ? undefined : (justificativas[alunoId] || 'Falta sem justificativa'),
-          capitulos_lidos: 0,
-          fez_atividade: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          capitulos_lidos: capitulosLidos[alunoId] || 0,
+          fez_atividade: atividadeFeita[alunoId] || false,
+          created_at: new Date().toISOString()
         }
         presencasArray.push(presenca)
       }
-
-      localStorage.setItem('presencas_alunos', JSON.stringify(presencasArray))
-
-      showMessage('success', 'Chamada salva com sucesso!')
       
-      // Atualizar dashboard e relatórios (simulação)
-      atualizarDashboardRelatorios(novaChamada)
+      if (presencasArray.length > 0) {
+        const { error: presencaError } = await supabase
+          .from('presencas_alunos')
+          .insert(presencasArray)
+        
+        if (presencaError) throw presencaError
+      }
+      
+      setSuccess('Chamada criada com sucesso!')
       
       // Resetar formulário
-      setChamadaAtual({
+      setNovaChamada({
         data: new Date().toISOString().split('T')[0],
-        sala_id: user?.role === 'professor' ? chamadaAtual.sala_id : '',
-        total_visitantes: 0,
+        horario: new Date().toTimeString().slice(0, 5),
+        capitulo: '',
+        atividade_descricao: '',
         observacoes: ''
       })
       
-      // Resetar presenças e justificativas
-      const presencasIniciais: {[key: string]: boolean} = {}
-      const justificativasIniciais: {[key: string]: string} = {}
-      alunos.forEach(aluno => {
-        presencasIniciais[aluno.id] = false
-        justificativasIniciais[aluno.id] = ''
-      })
-      setPresencasAlunos(presencasIniciais)
-      setJustificativas(justificativasIniciais)
-      
       // Recarregar dados
-      await loadData()
-
-    } catch (error) {
-      console.error('Erro ao salvar chamada:', error)
-      showMessage('error', 'Erro ao salvar chamada. Tente novamente.')
+      carregarDados()
+      
+    } catch (err) {
+      console.error('Erro ao criar chamada:', err)
+      setError('Erro ao criar chamada')
     } finally {
-      setSalvando(false)
+      setLoading(false)
     }
   }
 
-  const atualizarDashboardRelatorios = (chamada: Chamada) => {
+  const atualizarPresenca = async () => {
+    if (!selectedChamada) {
+      setError('Selecione uma chamada')
+      return
+    }
+
     try {
-      // Atualizar estatísticas do dashboard
-      const statsStorage = localStorage.getItem('dashboard_stats')
-      const stats = statsStorage ? JSON.parse(statsStorage) : {
-        total_chamadas: 0,
-        total_presentes_mes: 0,
-        total_visitantes_mes: 0,
-        frequencia_media: 0
+      setLoading(true)
+      setError(null)
+      
+      // Atualizar presenças existentes
+      for (const aluno of alunos) {
+        const alunoId = aluno.id
+        const presente = presencaAlunos[alunoId] || false
+        
+        const presencaData = {
+          presente,
+          justificativa: presente ? null : (justificativas[alunoId] || 'Falta sem justificativa'),
+          capitulos_lidos: capitulosLidos[alunoId] || 0,
+          fez_atividade: atividadeFeita[alunoId] || false
+        }
+        
+        const { error } = await supabase
+          .from('presencas_alunos')
+          .update(presencaData)
+          .eq('chamada_id', selectedChamada)
+          .eq('aluno_id', alunoId)
+        
+        if (error) throw error
       }
-
-      stats.total_chamadas += 1
-      stats.total_presentes_mes += chamada.total_presentes
-      stats.total_visitantes_mes += chamada.total_visitantes
-
-      localStorage.setItem('dashboard_stats', JSON.stringify(stats))
-
-      // Atualizar dados para relatórios
-      const relatoriosStorage = localStorage.getItem('dados_relatorios')
-      const dadosRelatorios = relatoriosStorage ? JSON.parse(relatoriosStorage) : []
       
-      dadosRelatorios.push({
-        data: chamada.data,
-        sala_id: chamada.sala_id,
-        presentes: chamada.total_presentes,
-        visitantes: chamada.total_visitantes,
-        total: chamada.total_presentes + chamada.total_visitantes,
-        timestamp: new Date().toISOString()
-      })
-
-      localStorage.setItem('dados_relatorios', JSON.stringify(dadosRelatorios))
+      setSuccess('Presenças atualizadas com sucesso!')
       
-    } catch (error) {
-      console.error('Erro ao atualizar dashboard/relatórios:', error)
+    } catch (err) {
+      console.error('Erro ao atualizar presenças:', err)
+      setError('Erro ao atualizar presenças')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const getSalaNome = (salaId: string) => {
-    const sala = salas.find(s => s.id === salaId)
-    return sala?.nome || 'Sala não encontrada'
+  const togglePresenca = (alunoId: string) => {
+    setPresencaAlunos(prev => ({
+      ...prev,
+      [alunoId]: !prev[alunoId]
+    }))
   }
 
-  const getProfessorNome = (professorId: string) => {
-    const professor = professores.find(p => p.id === professorId)
-    return professor?.nome || 'Professor não encontrado'
+  const updateJustificativa = (alunoId: string, justificativa: string) => {
+    setJustificativas(prev => ({
+      ...prev,
+      [alunoId]: justificativa
+    }))
   }
 
-  const totalPresentes = Object.values(presencasAlunos).filter(presente => presente).length
-  const totalFaltas = alunos.length - totalPresentes
-  const totalGeralPresentes = totalPresentes + chamadaAtual.total_visitantes
+  const updateCapitulos = (alunoId: string, capitulos: number) => {
+    setCapitulosLidos(prev => ({
+      ...prev,
+      [alunoId]: capitulos
+    }))
+  }
 
-  const podeRegistrarChamada = verificarDiaPermitido(chamadaAtual.data)
+  const toggleAtividade = (alunoId: string) => {
+    setAtividadeFeita(prev => ({
+      ...prev,
+      [alunoId]: !prev[alunoId]
+    }))
+  }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    )
+  const getTurmaById = (id: string) => turmas.find(t => t.id === id)
+  const getProfessorById = (id: string) => professores.find(p => p.id === id)
+  const getChamadaById = (id: string) => chamadas.find(c => c.id === id)
+
+  const estatisticas = {
+    totalAlunos: alunos.length,
+    presentes: Object.values(presencaAlunos).filter(Boolean).length,
+    ausentes: Object.values(presencaAlunos).filter(p => !p).length,
+    percentualPresenca: alunos.length > 0 ? Math.round((Object.values(presencaAlunos).filter(Boolean).length / alunos.length) * 100) : 0
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Registro de Chamada</h1>
-          <p className="text-gray-600 text-lg">Registre a presença dos alunos na EBD</p>
-        </div>
-        
-        {(user?.role === 'admin' || user?.role === 'admin_igreja') && (
-          <Button
-            onClick={() => setShowConfig(true)}
-            variant="outline"
-            className="flex items-center"
-          >
-            <Settings className="mr-2 h-4 w-4" />
-            Configurações
-          </Button>
-        )}
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex items-center gap-2 mb-6">
+        <Users className="h-8 w-8 text-blue-600" />
+        <h1 className="text-3xl font-bold">Gerenciamento de Chamadas</h1>
       </div>
 
-      {message && (
-        <Alert className={cn(
-          "border-l-4",
-          message.type === 'success' 
-            ? "border-green-500 bg-green-50 text-green-800"
-            : "border-red-500 bg-red-50 text-red-800"
-        )}>
-          {message.type === 'success' ? (
-            <CheckCircle className="h-4 w-4" />
-          ) : (
-            <AlertCircle className="h-4 w-4" />
-          )}
-          <AlertDescription>{message.text}</AlertDescription>
-        </Alert>
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <AlertCircle className="h-5 w-5" />
+          {error}
+        </div>
       )}
 
-      {/* Configurações de Chamada */}
-      <Dialog open={showConfig} onOpenChange={setShowConfig}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <CalendarDays className="mr-2 h-5 w-5 text-blue-600" />
-              Configurações de Chamada
-            </DialogTitle>
-            <DialogDescription>
-              Configure quando as chamadas podem ser registradas
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-6">
-            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+      {success && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <CheckCircle className="h-5 w-5" />
+          {success}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Formulário de Nova Chamada */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Nova Chamada
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label className="font-medium">Restringir por dias específicos</Label>
-                <p className="text-sm text-gray-600">Permitir chamadas apenas em dias definidos</p>
-              </div>
-              <Switch
-                checked={configuracao.dias_especificos}
-                onCheckedChange={(checked) => setConfiguracao(prev => ({ ...prev, dias_especificos: checked }))}
-              />
-            </div>
-
-            {configuracao.dias_especificos && (
-              <div className="space-y-3">
-                <Label className="font-medium">Dias permitidos para chamada</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  {diasSemana.map((dia) => (
-                    <div key={dia.value} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id={dia.value}
-                        checked={configuracao.dias_permitidos.includes(dia.value)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setConfiguracao(prev => ({
-                              ...prev,
-                              dias_permitidos: [...prev.dias_permitidos, dia.value]
-                            }))
-                          } else {
-                            setConfiguracao(prev => ({
-                              ...prev,
-                              dias_permitidos: prev.dias_permitidos.filter(d => d !== dia.value)
-                            }))
-                          }
-                        }}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <Label htmlFor={dia.value} className="text-sm">{dia.label}</Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end space-x-3 pt-4">
-              <Button variant="outline" onClick={() => setShowConfig(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={salvarConfiguracao} className="bg-blue-600 hover:bg-blue-700">
-                Salvar Configurações
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Alerta de dia não permitido */}
-      {configuracao.dias_especificos && !podeRegistrarChamada && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Chamadas não são permitidas na data selecionada. Dias permitidos: {configuracao.dias_permitidos.map(d => diasSemana.find(ds => ds.value === d)?.label).join(', ')}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Dialog para Justificativa */}
-      <Dialog open={dialogJustificativa.open} onOpenChange={(open) => setDialogJustificativa(prev => ({ ...prev, open }))}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <MessageSquare className="mr-2 h-5 w-5 text-orange-600" />
-              Justificativa de Falta
-            </DialogTitle>
-            <DialogDescription>
-              Informe o motivo da falta de <strong>{dialogJustificativa.alunoNome}</strong>
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="justificativa">Motivo da falta</Label>
-              <Textarea
-                id="justificativa"
-                placeholder="Ex: Doença, viagem, compromisso familiar..."
-                value={justificativas[dialogJustificativa.alunoId] || ''}
-                onChange={(e) => setJustificativas(prev => ({
-                  ...prev,
-                  [dialogJustificativa.alunoId]: e.target.value
-                }))}
-                className="min-h-[100px]"
-              />
-            </div>
-            
-            <div className="flex justify-end space-x-3">
-              <Button 
-                variant="outline" 
-                onClick={() => setDialogJustificativa({ open: false, alunoId: '', alunoNome: '' })}
-              >
-                Cancelar
-              </Button>
-              <Button onClick={salvarJustificativa} className="bg-orange-600 hover:bg-orange-700">
-                Salvar Justificativa
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Formulário de Chamada */}
-      <Card className="border-0 shadow-xl">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50">
-          <CardTitle className="flex items-center text-xl">
-            <ClipboardList className="mr-3 h-6 w-6 text-blue-600" />
-            Nova Chamada
-          </CardTitle>
-          <CardDescription className="text-base">
-            Preencha os dados da chamada e marque a presença dos alunos
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="data" className="font-medium">Data da Chamada</Label>
-              <Input
-                id="data"
-                type="date"
-                value={chamadaAtual.data}
-                onChange={(e) => setChamadaAtual({ ...chamadaAtual, data: e.target.value })}
-                className="h-12"
-              />
-            </div>
-
-            {user?.role !== 'professor' && (
-              <div className="space-y-2">
-                <Label htmlFor="sala" className="font-medium">Sala</Label>
-                <Select
-                  value={chamadaAtual.sala_id}
-                  onValueChange={(value) => {
-                    setChamadaAtual({ ...chamadaAtual, sala_id: value })
-                  }}
-                >
-                  <SelectTrigger className="h-12">
-                    <SelectValue placeholder="Selecione uma sala" />
+                <Label htmlFor="turma">Turma *</Label>
+                <Select value={selectedTurma} onValueChange={setSelectedTurma}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a turma" />
                   </SelectTrigger>
                   <SelectContent>
-                    {salas.map((sala) => (
-                      <SelectItem key={sala.id} value={sala.id}>
-                        {sala.nome} {sala.faixa_etaria && `(${sala.faixa_etaria})`}
+                    {turmas.map(turma => (
+                      <SelectItem key={turma.id} value={turma.id}>
+                        {turma.nome}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="visitantes" className="font-medium">Visitantes</Label>
+              <div>
+                <Label htmlFor="professor">Professor *</Label>
+                <Select value={selectedProfessor} onValueChange={setSelectedProfessor}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o professor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {professores.map(professor => (
+                      <SelectItem key={professor.id} value={professor.id}>
+                        {professor.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="data">Data *</Label>
+                <Input
+                  id="data"
+                  type="date"
+                  value={novaChamada.data}
+                  onChange={(e) => setNovaChamada(prev => ({ ...prev, data: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="horario">Horário *</Label>
+                <Input
+                  id="horario"
+                  type="time"
+                  value={novaChamada.horario}
+                  onChange={(e) => setNovaChamada(prev => ({ ...prev, horario: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="capitulo">Capítulo *</Label>
               <Input
-                id="visitantes"
-                type="number"
-                min="0"
-                value={chamadaAtual.total_visitantes}
-                onChange={(e) => setChamadaAtual({ ...chamadaAtual, total_visitantes: parseInt(e.target.value) || 0 })}
-                className="h-12"
+                id="capitulo"
+                placeholder="Ex: Capítulo 5 - Revolução Industrial"
+                value={novaChamada.capitulo}
+                onChange={(e) => setNovaChamada(prev => ({ ...prev, capitulo: e.target.value }))}
               />
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="observacoes" className="font-medium">Observações</Label>
-            <Textarea
-              id="observacoes"
-              placeholder="Observações sobre a aula (opcional)"
-              value={chamadaAtual.observacoes}
-              onChange={(e) => setChamadaAtual({ ...chamadaAtual, observacoes: e.target.value })}
-              className="min-h-[80px]"
-            />
-          </div>
-        </CardContent>
-      </Card>
+            <div>
+              <Label htmlFor="atividade">Descrição da Atividade</Label>
+              <Textarea
+                id="atividade"
+                placeholder="Descreva a atividade realizada na aula..."
+                value={novaChamada.atividade_descricao}
+                onChange={(e) => setNovaChamada(prev => ({ ...prev, atividade_descricao: e.target.value }))}
+              />
+            </div>
 
-      {/* Lista de Alunos */}
-      {chamadaAtual.sala_id && (
-        <Card className="border-0 shadow-xl">
-          <CardHeader className="bg-gradient-to-r from-green-50 to-blue-50">
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center">
-                <Users className="mr-3 h-6 w-6 text-green-600" />
-                Lista de Alunos - {getSalaNome(chamadaAtual.sala_id)}
-              </div>
-              <Badge variant="secondary" className="text-sm px-3 py-1">
-                {alunos.length} aluno{alunos.length !== 1 ? 's' : ''}
-              </Badge>
-            </CardTitle>
-            <CardDescription className="text-base">
-              {alunos.length === 0 
-                ? 'Nenhum aluno cadastrado nesta sala'
-                : 'Clique nos cards dos alunos para marcar presença ou falta'
-              }
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-            {alunos.length === 0 ? (
-              <div className="text-center py-8">
-                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600 text-lg">Nenhum aluno cadastrado nesta sala</p>
-                <p className="text-gray-500 text-sm">Cadastre alunos para poder fazer a chamada</p>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                  {alunos.map((aluno) => {
-                    const presente = presencasAlunos[aluno.id] || false
-                    const temJustificativa = justificativas[aluno.id] && justificativas[aluno.id].trim() !== ''
-                    
-                    return (
-                      <Card
-                        key={aluno.id}
-                        className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
-                          presente 
-                            ? 'bg-gradient-to-r from-green-50 to-green-100 border-green-300 shadow-md' 
-                            : 'bg-gradient-to-r from-red-50 to-red-100 border-red-300'
-                        }`}
-                        onClick={() => togglePresenca(aluno.id)}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <div className={`p-2 rounded-full ${
-                                presente ? 'bg-green-500' : 'bg-red-500'
-                              }`}>
-                                {presente ? (
-                                  <CheckCircle className="h-5 w-5 text-white" />
-                                ) : (
-                                  <XCircle className="h-5 w-5 text-white" />
-                                )}
-                              </div>
-                              <div>
-                                <h3 className="font-semibold text-gray-900">{aluno.nome}</h3>
-                                <p className={`text-sm font-medium ${
-                                  presente ? 'text-green-700' : 'text-red-700'
-                                }`}>
-                                  {presente ? 'Presente' : 'Falta'}
-                                </p>
-                                {!presente && temJustificativa && (
-                                  <div className="flex items-center mt-1">
-                                    <MessageSquare className="h-3 w-3 text-orange-600 mr-1" />
-                                    <span className="text-xs text-orange-600">Com justificativa</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex flex-col items-end space-y-1">
-                              <Badge 
-                                variant={presente ? 'default' : 'destructive'}
-                                className="text-xs"
-                              >
-                                {presente ? 'P' : 'F'}
-                              </Badge>
-                              {!presente && temJustificativa && (
-                                <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200">
-                                  Justificada
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          
-                          {!presente && temJustificativa && (
-                            <div className="mt-3 p-2 bg-orange-50 rounded border border-orange-200">
-                              <p className="text-xs text-orange-800 font-medium">Justificativa:</p>
-                              <p className="text-xs text-orange-700">{justificativas[aluno.id]}</p>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-                </div>
+            <div>
+              <Label htmlFor="observacoes">Observações</Label>
+              <Textarea
+                id="observacoes"
+                placeholder="Observações gerais sobre a aula..."
+                value={novaChamada.observacoes}
+                onChange={(e) => setNovaChamada(prev => ({ ...prev, observacoes: e.target.value }))}
+              />
+            </div>
 
-                {/* Resumo da Chamada */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <Card className="bg-green-50 border-green-200">
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-green-600">{totalPresentes}</div>
-                      <p className="text-sm text-green-700 font-medium">Presentes</p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="bg-red-50 border-red-200">
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-red-600">{totalFaltas}</div>
-                      <p className="text-sm text-red-700 font-medium">Faltas</p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="bg-blue-50 border-blue-200">
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-blue-600">{chamadaAtual.total_visitantes}</div>
-                      <p className="text-sm text-blue-700 font-medium">Visitantes</p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="bg-purple-50 border-purple-200">
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-purple-600">{totalGeralPresentes}</div>
-                      <p className="text-sm text-purple-700 font-medium">Total Presente</p>
-                      <p className="text-xs text-purple-600">(Presentes + Visitantes)</p>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <Button
-                  onClick={handleSalvarChamada}
-                  disabled={salvando || !chamadaAtual.sala_id || !podeRegistrarChamada}
-                  className="w-full h-12 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-semibold"
-                >
-                  {salvando ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Salvando Chamada...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-5 w-5" />
-                      Salvar Chamada
-                    </>
-                  )}
-                </Button>
-              </>
-            )}
+            <Button 
+              onClick={criarChamada} 
+              disabled={loading || !selectedTurma || !selectedProfessor || !novaChamada.capitulo}
+              className="w-full"
+            >
+              {loading ? 'Criando...' : 'Criar Chamada'}
+            </Button>
           </CardContent>
         </Card>
-      )}
 
-      {/* Chamadas Recentes */}
-      <Card className="border-0 shadow-xl">
-        <CardHeader>
-          <CardTitle className="flex items-center text-xl">
-            <Calendar className="mr-3 h-6 w-6 text-purple-600" />
-            Chamadas Recentes
-          </CardTitle>
-          <CardDescription className="text-base">
-            Últimas chamadas registradas
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-6">
-          {chamadas.length === 0 ? (
-            <div className="text-center py-8">
-              <ClipboardList className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 text-lg">Nenhuma chamada registrada ainda</p>
+        {/* Estatísticas */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5" />
+              Estatísticas da Chamada
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center p-4 bg-blue-50 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">{estatisticas.totalAlunos}</div>
+                <div className="text-sm text-gray-600">Total de Alunos</div>
+              </div>
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">{estatisticas.presentes}</div>
+                <div className="text-sm text-gray-600">Presentes</div>
+              </div>
+              <div className="text-center p-4 bg-red-50 rounded-lg">
+                <div className="text-2xl font-bold text-red-600">{estatisticas.ausentes}</div>
+                <div className="text-sm text-gray-600">Ausentes</div>
+              </div>
+              <div className="text-center p-4 bg-purple-50 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">{estatisticas.percentualPresenca}%</div>
+                <div className="text-sm text-gray-600">Presença</div>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {chamadas.slice(0, 5).map((chamada) => (
-                <div key={chamada.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-                  <div>
-                    <p className="font-semibold text-gray-900">{getSalaNome(chamada.sala_id)}</p>
-                    <p className="text-sm text-gray-600">
-                      {getProfessorNome(chamada.professor_id)} • {new Date(chamada.data).toLocaleDateString('pt-BR')}
-                    </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Lista de Alunos para Chamada */}
+      {selectedTurma && alunos.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Lista de Chamada - {getTurmaById(selectedTurma)?.nome}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {alunos.map(aluno => (
+                <div key={aluno.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center gap-4">
+                    <Checkbox
+                      checked={presencaAlunos[aluno.id] || false}
+                      onCheckedChange={() => togglePresenca(aluno.id)}
+                    />
+                    <div>
+                      <div className="font-medium">{aluno.nome}</div>
+                      <div className="text-sm text-gray-500">{aluno.email}</div>
+                    </div>
+                    {presencaAlunos[aluno.id] ? (
+                      <Badge variant="default" className="bg-green-100 text-green-800">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Presente
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="bg-red-100 text-red-800">
+                        <XCircle className="h-3 w-3 mr-1" />
+                        Ausente
+                      </Badge>
+                    )}
                   </div>
-                  <div className="text-right">
-                    <div className="flex items-center space-x-4">
-                      <div className="text-center">
-                        <div className="text-sm font-semibold text-green-600">{chamada.total_presentes}</div>
-                        <div className="text-xs text-gray-500">Presentes</div>
-                      </div>
-                      {chamada.total_visitantes > 0 && (
-                        <div className="text-center">
-                          <div className="text-sm font-semibold text-blue-600">{chamada.total_visitantes}</div>
-                          <div className="text-xs text-gray-500">Visitantes</div>
-                        </div>
-                      )}
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-purple-600">
-                          {chamada.total_presentes + chamada.total_visitantes}
-                        </div>
-                        <div className="text-xs text-gray-500">Total</div>
-                      </div>
+                  
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm">Capítulos:</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="50"
+                        value={capitulosLidos[aluno.id] || 0}
+                        onChange={(e) => updateCapitulos(aluno.id, parseInt(e.target.value) || 0)}
+                        className="w-20"
+                      />
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={atividadeFeita[aluno.id] || false}
+                        onCheckedChange={() => toggleAtividade(aluno.id)}
+                      />
+                      <Label className="text-sm">Fez Atividade</Label>
                     </div>
                   </div>
                 </div>
               ))}
+              
+              {/* Justificativas para ausentes */}
+              {Object.keys(presencaAlunos).some(id => !presencaAlunos[id]) && (
+                <div className="mt-6 space-y-4">
+                  <h3 className="font-medium text-lg">Justificativas de Ausência</h3>
+                  {alunos
+                    .filter(aluno => !presencaAlunos[aluno.id])
+                    .map(aluno => (
+                      <div key={`just-${aluno.id}`} className="space-y-2">
+                        <Label>{aluno.nome}</Label>
+                        <Textarea
+                          placeholder="Justificativa da ausência..."
+                          value={justificativas[aluno.id] || ''}
+                          onChange={(e) => updateJustificativa(aluno.id, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                </div>
+              )}
             </div>
-          )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Chamadas Existentes */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Chamadas Existentes
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <Label>Selecionar Chamada para Editar</Label>
+              <Select value={selectedChamada} onValueChange={setSelectedChamada}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione uma chamada" />
+                </SelectTrigger>
+                <SelectContent>
+                  {chamadas.map(chamada => {
+                    const turma = getTurmaById(chamada.turma_id)
+                    const professor = getProfessorById(chamada.professor_id)
+                    return (
+                      <SelectItem key={chamada.id} value={chamada.id}>
+                        {turma?.nome} - {chamada.data} {chamada.horario} - {professor?.nome}
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedChamada && (
+              <div className="mt-4">
+                <Button onClick={atualizarPresenca} disabled={loading}>
+                  {loading ? 'Atualizando...' : 'Atualizar Presenças'}
+                </Button>
+              </div>
+            )}
+
+            {chamadas.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                Nenhuma chamada encontrada
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

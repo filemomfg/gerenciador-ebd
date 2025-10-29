@@ -112,7 +112,7 @@ export function AvisosView() {
     }
 
     try {
-      const avisoData = {
+      const avisoData: Aviso = {
         id: Date.now().toString(),
         titulo: formData.titulo,
         conteudo: formData.conteudo,

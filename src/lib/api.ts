@@ -6,7 +6,7 @@ const generateId = () => crypto.randomUUID()
 
 // Função para verificar se Supabase está configurado
 const isSupabaseConfigured = () => {
-  return process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  return supabase !== null && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 }
 
 // Fallback para localStorage quando Supabase não estiver configurado
@@ -93,7 +93,7 @@ export const api = {
     
     console.log('Tentando login com:', email, password)
     
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         // Buscar no Supabase
         const { data: users, error } = await supabase
@@ -149,7 +149,7 @@ export const api = {
 
   // Usuários
   getUsers: async (): Promise<User[]> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('users')
@@ -175,7 +175,7 @@ export const api = {
       updated_at: new Date().toISOString()
     }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('users')
@@ -200,7 +200,7 @@ export const api = {
   updateUser: async (id: string, userData: Partial<User>): Promise<User | null> => {
     const updatedData = { ...userData, updated_at: new Date().toISOString() }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('users')
@@ -228,7 +228,7 @@ export const api = {
   deleteUser: async (id: string): Promise<boolean> => {
     if (id === 'filemom-admin') return false
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase
           .from('users')
@@ -253,7 +253,7 @@ export const api = {
 
   // Igrejas
   getIgrejas: async (): Promise<Igreja[]> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('igrejas')
@@ -272,7 +272,7 @@ export const api = {
   },
 
   getIgrejaById: async (id: string): Promise<Igreja | null> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('igrejas')
@@ -299,7 +299,7 @@ export const api = {
       updated_at: new Date().toISOString()
     }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('igrejas')
@@ -323,7 +323,7 @@ export const api = {
   updateIgreja: async (id: string, igrejaData: Partial<Igreja>): Promise<Igreja | null> => {
     const updatedData = { ...igrejaData, updated_at: new Date().toISOString() }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('igrejas')
@@ -348,7 +348,7 @@ export const api = {
   },
 
   deleteIgreja: async (id: string): Promise<boolean> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase
           .from('igrejas')
@@ -381,7 +381,7 @@ export const api = {
 
   // Salas
   getSalas: async (igrejaId?: string): Promise<Sala[]> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         let query = supabase.from('salas').select('*')
         if (igrejaId) {
@@ -402,7 +402,7 @@ export const api = {
   },
 
   getSalaById: async (id: string): Promise<Sala | null> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('salas')
@@ -429,7 +429,7 @@ export const api = {
       updated_at: new Date().toISOString()
     }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('salas')
@@ -453,7 +453,7 @@ export const api = {
   updateSala: async (id: string, salaData: Partial<Sala>): Promise<Sala | null> => {
     const updatedData = { ...salaData, updated_at: new Date().toISOString() }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('salas')
@@ -478,7 +478,7 @@ export const api = {
   },
 
   deleteSala: async (id: string): Promise<boolean> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase
           .from('salas')
@@ -508,7 +508,7 @@ export const api = {
 
   // Professores
   getProfessores: async (igrejaId?: string): Promise<Professor[]> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         let query = supabase.from('professores').select('*')
         if (igrejaId) {
@@ -536,7 +536,7 @@ export const api = {
       updated_at: new Date().toISOString()
     }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('professores')
@@ -560,7 +560,7 @@ export const api = {
   updateProfessor: async (id: string, professorData: Partial<Professor>): Promise<Professor | null> => {
     const updatedData = { ...professorData, updated_at: new Date().toISOString() }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('professores')
@@ -585,7 +585,7 @@ export const api = {
   },
 
   deleteProfessor: async (id: string): Promise<boolean> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase
           .from('professores')
@@ -615,7 +615,7 @@ export const api = {
 
   // Alunos
   getAlunos: async (salaId?: string, igrejaId?: string): Promise<Aluno[]> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         let query = supabase.from('alunos').select('*').eq('ativo', true)
         if (salaId) query = query.eq('sala_id', salaId)
@@ -645,7 +645,7 @@ export const api = {
       updated_at: new Date().toISOString()
     }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('alunos')
@@ -669,7 +669,7 @@ export const api = {
   updateAluno: async (id: string, alunoData: Partial<Aluno>): Promise<Aluno | null> => {
     const updatedData = { ...alunoData, updated_at: new Date().toISOString() }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('alunos')
@@ -694,7 +694,7 @@ export const api = {
   },
 
   deleteAluno: async (id: string): Promise<boolean> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase
           .from('alunos')
@@ -720,7 +720,7 @@ export const api = {
 
   // Chamadas
   getChamadas: async (salaId?: string, igrejaId?: string): Promise<Chamada[]> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         let query = supabase.from('chamadas').select('*')
         if (salaId) query = query.eq('sala_id', salaId)
@@ -750,7 +750,7 @@ export const api = {
       updated_at: new Date().toISOString()
     }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('chamadas')
@@ -773,7 +773,7 @@ export const api = {
 
   // Presenças
   getPresencas: async (chamadaId: string): Promise<PresencaAluno[]> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('presencas')
@@ -798,7 +798,7 @@ export const api = {
       created_at: new Date().toISOString()
     }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('presencas')
@@ -825,7 +825,7 @@ export const api = {
 
   // Avisos
   getAvisos: async (igrejaId?: string, salaId?: string): Promise<Aviso[]> => {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         let query = supabase.from('avisos').select('*').eq('ativo', true)
         if (igrejaId) query = query.eq('igreja_id', igrejaId)
@@ -855,7 +855,7 @@ export const api = {
       updated_at: new Date().toISOString()
     }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
           .from('avisos')

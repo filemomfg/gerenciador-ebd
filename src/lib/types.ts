@@ -111,10 +111,9 @@ export interface Aviso {
   id: string
   titulo: string
   conteudo: string
-  tipo: 'geral' | 'sala' | 'professor'
+  tipo: 'geral' | 'sala' | 'igreja'
   igreja_id: string
   sala_id?: string
-  professor_id?: string
   ativo: boolean
   data_inicio: string
   data_fim?: string
